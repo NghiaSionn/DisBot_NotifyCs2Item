@@ -1,0 +1,9 @@
+{
+  "name": "cs2-price-bot-wrapper",
+  "version": "1.0.0",
+  "description": "Node.js wrapper để chạy CS2 Price Bot (C#) trên Katabump",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}

@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+*.pdb
+*.dll
+*.exe
+
+# Deployment
+LinuxBuild/
+*.zip
+
+# Sensitive Data
+bot_data.json
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln
