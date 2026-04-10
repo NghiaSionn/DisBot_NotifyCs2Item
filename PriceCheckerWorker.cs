@@ -32,6 +32,12 @@ namespace CS2PriceBot
                     continue;
                 }
 
+                if (!_storage.Config.EnableCS2Notifications)
+                {
+                    await Task.Delay(10000, stoppingToken);
+                    continue;
+                }
+
                 var items = _storage.Config.TrackedItems.ToList();
                 foreach (var item in items)
                 {

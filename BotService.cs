@@ -13,12 +13,14 @@ namespace CS2PriceBot
         private readonly DiscordSocketClient _client;
         private readonly DataStorage _storage;
         private readonly SteamMarketService _steamService;
+        private readonly UnityAssetService _unityService;
 
-        public BotService(DiscordSocketClient client, DataStorage storage, SteamMarketService steamService)
+        public BotService(DiscordSocketClient client, DataStorage storage, SteamMarketService steamService, UnityAssetService unityService)
         {
             _client = client;
             _storage = storage;
             _steamService = steamService;
+            _unityService = unityService;
 
             _client.Log += LogAsync;
             _client.Ready += ReadyAsync;
@@ -47,50 +49,72 @@ namespace CS2PriceBot
         {
             Console.WriteLine($"\n--- Bot đã kết nối thành công: {_client.CurrentUser.Username} ---\n");
             
-            foreach (var guild in _client.Guilds)
+            var trackCommand = new SlashCommandBuilder()
+                .WithName("track")
+                .WithDescription("Khởi tạo theo dõi giá cho một vật phẩm CS2")
+                .AddOption("item", ApplicationCommandOptionType.String, "Tên vật phẩm (ví dụ: MAC-10 | Amber Fade (Factory New))", isRequired: true);
+                
+            var untrackCommand = new SlashCommandBuilder()
+                .WithName("untrack")
+                .WithDescription("Ngừng theo dõi giá của một vật phẩm CS2")
+                .AddOption("item", ApplicationCommandOptionType.String, "Tên vật phẩm cần xóa", isRequired: true);
+                
+            var listCommand = new SlashCommandBuilder()
+                .WithName("list")
+                .WithDescription("Xem danh sách các vật phẩm hoặc quà tặng đang theo dõi")
+                .AddOption(new SlashCommandOptionBuilder()
+                    .WithName("filter")
+                    .WithDescription("Chọn loại danh sách hiển thị")
+                    .WithType(ApplicationCommandOptionType.String)
+                    .AddChoice("Tất cả", "all")
+                    .AddChoice("CS2 (Skins)", "cs")
+                    .AddChoice("Unity (Free Gift)", "unity"));
+                
+            var setchannelCommand = new SlashCommandBuilder()
+                .WithName("setchannel")
+                .WithDescription("Đặt kênh hiện tại làm nơi nhận thông báo giá từ bot");
+                
+            var setintervalCommand = new SlashCommandBuilder()
+                .WithName("setinterval")
+                .WithDescription("Thay đổi thời gian kiểm tra giá (mặc định: 30 phút)")
+                .AddOption("minutes", ApplicationCommandOptionType.Integer, "Số phút giữa mỗi lần quét", isRequired: true);
+
+            var onlyincreaseCommand = new SlashCommandBuilder()
+                .WithName("onlyincrease")
+                .WithDescription("Bật/tắt chế độ CHỈ thông báo khi giá TĂNG")
+                .AddOption("enable", ApplicationCommandOptionType.Boolean, "Chọn True (Bật) hoặc False (Tắt thông báo khi giảm)", isRequired: true);
+
+            var selectCommand = new SlashCommandBuilder()
+                .WithName("select")
+                .WithDescription("Bật/tắt thông báo cho các ứng dụng")
+                .AddOption(new SlashCommandOptionBuilder()
+                    .WithName("app")
+                    .WithDescription("Chọn ứng dụng")
+                    .WithType(ApplicationCommandOptionType.String)
+                    .WithRequired(true)
+                    .AddChoice("CS2 (Giá vật phẩm)", "cs2")
+                    .AddChoice("Unity (Quà tặng hàng tuần)", "unity"))
+                .AddOption("status", ApplicationCommandOptionType.Boolean, "Chọn True (Bật) hoặc False (Tắt)", isRequired: true);
+
+            try 
             {
-                var trackCommand = new SlashCommandBuilder()
-                    .WithName("track")
-                    .WithDescription("Khởi tạo theo dõi giá cho một vật phẩm CS2")
-                    .AddOption("item", ApplicationCommandOptionType.String, "Tên vật phẩm (ví dụ: MAC-10 | Amber Fade (Factory New))", isRequired: true);
-                    
-                var untrackCommand = new SlashCommandBuilder()
-                    .WithName("untrack")
-                    .WithDescription("Ngừng theo dõi giá của một vật phẩm CS2")
-                    .AddOption("item", ApplicationCommandOptionType.String, "Tên vật phẩm cần xóa", isRequired: true);
-                    
-                var listCommand = new SlashCommandBuilder()
-                    .WithName("list")
-                    .WithDescription("Xem danh sách các vật phẩm đang được theo dõi");
-                    
-                var setchannelCommand = new SlashCommandBuilder()
-                    .WithName("setchannel")
-                    .WithDescription("Đặt kênh hiện tại làm nơi nhận thông báo giá từ bot");
-                    
-                var setintervalCommand = new SlashCommandBuilder()
-                    .WithName("setinterval")
-                    .WithDescription("Thay đổi thời gian kiểm tra giá (mặc định: 30 phút)")
-                    .AddOption("minutes", ApplicationCommandOptionType.Integer, "Số phút giữa mỗi lần quét", isRequired: true);
-
-                var onlyincreaseCommand = new SlashCommandBuilder()
-                    .WithName("onlyincrease")
-                    .WithDescription("Bật/tắt chế độ CHỈ thông báo khi giá TĂNG")
-                    .AddOption("enable", ApplicationCommandOptionType.Boolean, "Chọn True (Bật) hoặc False (Tắt thông báo khi giảm)", isRequired: true);
-
-                try 
+                var commandList = new ApplicationCommandProperties[] 
                 {
-                    await guild.CreateApplicationCommandAsync(trackCommand.Build());
-                    await guild.CreateApplicationCommandAsync(untrackCommand.Build());
-                    await guild.CreateApplicationCommandAsync(listCommand.Build());
-                    await guild.CreateApplicationCommandAsync(setchannelCommand.Build());
-                    await guild.CreateApplicationCommandAsync(setintervalCommand.Build());
-                    await guild.CreateApplicationCommandAsync(onlyincreaseCommand.Build());
-                    Console.WriteLine($"Đã tạo lệnh Gạch chéo (Slash Commands) cho server: {guild.Name}");
-                }
-                catch(Exception ex) 
-                {
-                    Console.WriteLine($"Lỗi khi tạo Slash Command ở server {guild.Name}: {ex.Message}");
-                }
+                    trackCommand.Build(),
+                    untrackCommand.Build(),
+                    listCommand.Build(),
+                    setchannelCommand.Build(),
+                    setintervalCommand.Build(),
+                    onlyincreaseCommand.Build(),
+                    selectCommand.Build()
+                };
+
+                await _client.BulkOverwriteGlobalApplicationCommandsAsync(commandList);
+                Console.WriteLine($"Đã đăng ký {commandList.Length} lệnh Global Slash Commands.");
+            }
+            catch(Exception ex) 
+            {
+                Console.WriteLine($"Lỗi khi đăng ký Global Slash Commands: {ex.Message}");
             }
         }
 
@@ -127,44 +151,67 @@ namespace CS2PriceBot
             }
             else if (command.CommandName == "list")
             {
-                // Defer response because fetching image might take more than 3 seconds
                 await command.DeferAsync();
+                
+                string filter = (string)(command.Data.Options.FirstOrDefault(o => o.Name == "filter")?.Value ?? "all");
+                bool showCs = filter == "all" || filter == "cs";
+                bool showUnity = filter == "all" || filter == "unity";
 
-                if (_storage.Config.TrackedItems.Count == 0)
+                var embed = new EmbedBuilder()
+                    .WithTitle("📋 Danh sách theo dõi")
+                    .WithColor(Color.Blue)
+                    .WithCurrentTimestamp();
+
+                if (showCs)
                 {
-                    await command.FollowupAsync("Danh sách theo dõi đang trống.");
+                    if (_storage.Config.TrackedItems.Count > 0)
+                    {
+                        string itemsStr = "";
+                        foreach (var item in _storage.Config.TrackedItems)
+                        {
+                            if (_storage.Config.LastKnownPrices.TryGetValue(item, out double price))
+                                itemsStr += $"• **{item}**: {price:N0} VNĐ\n";
+                            else
+                                itemsStr += $"• **{item}**: (Chưa có giá)\n";
+                        }
+                        embed.AddField("🎮 CS2 Skins", itemsStr);
+                        
+                        // Set thumbnail to first item
+                        var firstItem = _storage.Config.TrackedItems.First();
+                        var details = await _steamService.GetItemDetailsAsync(firstItem);
+                        if (!string.IsNullOrEmpty(details.IconUrl)) embed.WithThumbnailUrl(details.IconUrl);
+                    }
+                    else if (filter == "cs")
+                    {
+                        await command.FollowupAsync("Danh sách theo dõi CS2 đang trống.");
+                        return;
+                    }
+                }
+
+                if (showUnity)
+                {
+                    var gift = await _unityService.GetCurrentGiftAsync();
+                    if (gift != null)
+                    {
+                        embed.AddField("🎁 Unity Free Gift", $"**{gift.Title}**\nCode: `{gift.CouponCode}`\n[(Link Store)]({gift.Link})");
+                        if (!showCs || string.IsNullOrEmpty(embed.ThumbnailUrl))
+                        {
+                            embed.WithThumbnailUrl(gift.ImageUrl);
+                        }
+                    }
+                    else if (filter == "unity")
+                    {
+                        await command.FollowupAsync("Không thể lấy dữ liệu quà tặng Unity hiện tại.");
+                        return;
+                    }
+                }
+
+                if (embed.Fields.Count == 0)
+                {
+                    await command.FollowupAsync("Không có thông tin nào để hiển thị.");
                 }
                 else
                 {
-                    var embed = new EmbedBuilder()
-                        .WithTitle("📋 Danh sách vật phẩm đang theo dõi")
-                        .WithColor(Color.Blue)
-                        .WithFooter(footer => footer.WithText($"Tổng cộng: {_storage.Config.TrackedItems.Count} vật phẩm"))
-                        .WithCurrentTimestamp();
-
-                    // Nếu chỉ có 1 vài vật phẩm, ta lấy ảnh của vật phẩm đầu tiên làm thumbnail
-                    if (_storage.Config.TrackedItems.Count > 0)
-                    {
-                        var firstItem = _storage.Config.TrackedItems.First();
-                        var details = await _steamService.GetItemDetailsAsync(firstItem);
-                        if (!string.IsNullOrEmpty(details.IconUrl))
-                        {
-                            embed.WithThumbnailUrl(details.IconUrl);
-                        }
-                    }
-
-                    foreach (var item in _storage.Config.TrackedItems)
-                    {
-                        if (_storage.Config.LastKnownPrices.TryGetValue(item, out double price))
-                        {
-                            embed.AddField(item, $"**{price:N0} VNĐ** [(Link Steam)](https://steamcommunity.com/market/listings/730/{Uri.EscapeDataString(item)})", inline: false);
-                        }
-                        else
-                        {
-                            embed.AddField(item, $"(Chưa có dữ liệu giá) [(Link Steam)](https://steamcommunity.com/market/listings/730/{Uri.EscapeDataString(item)})", inline: false);
-                        }
-                    }
-
                     await command.FollowupAsync(embed: embed.Build());
                 }
             }
@@ -193,6 +240,24 @@ namespace CS2PriceBot
                     await command.RespondAsync($"📈 Đã BẬT chế độ: **Chỉ thông báo khi giá vật phẩm TĂNG**.");
                 else
                     await command.RespondAsync($"🔄 Đã TẮT chế độ báo tăng: Bot sẽ thông báo cả khi giá TĂNG và GIẢM.");
+            }
+            else if (command.CommandName == "select")
+            {
+                string app = (string)command.Data.Options.First(o => o.Name == "app").Value;
+                bool status = (bool)command.Data.Options.First(o => o.Name == "status").Value;
+
+                if (app == "cs2")
+                {
+                    _storage.Config.EnableCS2Notifications = status;
+                    _storage.Save();
+                    await command.RespondAsync($"{(status ? "✅" : "❌")} Đã **{(status ? "BẬT" : "TẮT")}** thông báo giá vật phẩm CS2.");
+                }
+                else if (app == "unity")
+                {
+                    _storage.Config.EnableUnityNotifications = status;
+                    _storage.Save();
+                    await command.RespondAsync($"{(status ? "✅" : "❌")} Đã **{(status ? "BẬT" : "TẮT")}** thông báo quà tặng Unity Publisher Sale hàng tuần.");
+                }
             }
         }
     }

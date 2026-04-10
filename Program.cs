@@ -31,8 +31,10 @@ namespace CS2PriceBot
             }));
             builder.Services.AddSingleton(storage);
             builder.Services.AddHttpClient<SteamMarketService>();
+            builder.Services.AddHttpClient<UnityAssetService>();
             builder.Services.AddHostedService<BotService>();
             builder.Services.AddHostedService<PriceCheckerWorker>();
+            builder.Services.AddHostedService<UnityGiftWorker>();
 
             var app = builder.Build();
             
